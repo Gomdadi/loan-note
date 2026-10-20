@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>차용증 작성</title>
+<meta name="description" content="빌려주는 사람과 빌리는 사람, 금액, 변제일, 보증, 미변제 시 조치까지 채우고 서명해 PNG로 저장하는 차용증 작성 페이지">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 문서·제목용 명조 -->
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<!-- 입력·버튼용 고딕 -->
+<link href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+<style>
+/* ===== 색·글꼴 토큰 =====
+   흰 계약지 + 먹 글자 + 주홍 인주. 주홍은 Send 도장, 찍힌 인영, 필수 누락 표시에만 쓴다. */
+:root {
+  --paper: #FFFFFF;
+  --ink: #1E1D1B;
+  --ink-2: #5C5953;      /* 보조 글자 (흰 바탕 대비 6.9:1) */
+  --ink-3: #77736C;      /* 자리표시 글자 (흰 바탕 대비 4.7:1) */
+  --rule: #D9D6D0;       /* 보조 괘선 */
+  --rule-soft: #ECEAE6;
+  --wash: #F6F5F2;       /* 포커스된 입력칸 바탕 */
+  --vermilion: #C73A22;  /* 인주 */
+  --vermilion-deep: #A92F1A;
+  --vermilion-wash: #F6DED8;
+  --serif: "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;
+  --sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --bar-h: 72px;
+  /* 미리보기 문서의 실제 크기: A4 (96dpi 기준 794 × 1123px) */
+  --sheet-w: 794px;
+  --sheet-h: 1123px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: #B9B5AE transparent; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 16px/1.6 var(--sans);
+  caret-color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: #E4E1DB; color: var(--ink); }
+h1, h2, p, ol, fieldset { margin: 0; padding: 0; }
+fieldset { border: 0; min-width: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* ===== 상단 바 ===== */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  height: var(--bar-h);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 0 clamp(16px, 3.4vw, 48px);
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink);
+}
+.brand { display: flex; align-items: baseline; gap: 16px; min-width: 0; }
+.mark { font: 800 24px/1 var(--serif); letter-spacing: .32em; margin-right: -.32em; white-space: nowrap; }
+.docno { font: 500 12px/1 var(--sans); color: var(--ink-2); letter-spacing: .04em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-right { display: flex; align-items: center; gap: 18px; }
+.status { text-align: right; font: 600 14px/1.35 var(--sans); color: var(--ink); }
+.status small { display: block; font-weight: 500; font-size: 12px; color: var(--ink-2); }
+.status.is-missing { color: var(--vermilion); }
+
+/* Send = 주홍 도장 버튼 */
+.seal-btn {
+  position: relative; flex: none;
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 0; cursor: pointer;
+  background: var(--vermilion); color: #fff;
+  font: 700 15px/1 var(--sans); letter-spacing: .02em;
+  box-shadow: 0 3px 8px -2px rgba(120, 32, 16, .45);
+  transition: background-color .15s, transform .15s var(--ease-out), box-shadow .15s;
+}
+.seal-btn::after { /* 도장 면의 링: 찍힌 인영의 링을 뒤집은 모양 */
+  content: ""; position: absolute; inset: 5px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .85);
+}
+.seal-btn:hover { background: var(--vermilion-deep); }
+.seal-btn:active { transform: scale(.94); box-shadow: 0 1px 3px -1px rgba(120, 32, 16, .5); }
+.seal-btn[aria-busy="true"] { cursor: progress; }
+.seal-btn[aria-busy="true"] span { opacity: 0; }
+.seal-btn[aria-busy="true"]::before { /* 내보내는 중: 바깥에서 도는 고리 */
+  content: ""; position: absolute; inset: -6px; border-radius: 50%;
+  border: 1.5px solid var(--vermilion); border-right-color: transparent;
+  animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 모바일 탭 (작성 / 미리보기) ===== */
+.tabs { display: none; }
+
+/* ===== 2열 레이아웃 ===== */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  gap: clamp(40px, 5vw, 80px);
+  max-width: 1480px; margin: 0 auto;
+  padding: 0 clamp(16px, 3.4vw, 48px) 96px;
+}
+
+/* ===== 입력 폼 ===== */
+.sec { padding-top: 44px; }
+.sec h2 {
+  font: 700 21px/1.3 var(--serif); letter-spacing: .02em;
+  padding-bottom: 12px; margin-bottom: 22px;
+  border-bottom: 1px solid var(--rule);
+}
+.parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
+.party { display: grid; gap: 16px; align-content: start; }
+.party legend, .sub legend {
+  display: block; width: 100%; padding: 0;
+  margin-bottom: 4px;
+  font: 700 16px/1.4 var(--sans);
+}
+.party legend span, .sub legend span { margin-left: 8px; font-weight: 500; font-size: 13px; color: var(--ink-2); }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 20px; margin-bottom: 18px; }
+.row:last-child { margin-bottom: 0; }
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > label { font: 500 13px/1.4 var(--sans); color: var(--ink-2); }
+.field > label em { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: 6px; }
+
+input, select, textarea {
+  width: 100%; margin: 0;
+  font: 400 17px/1.4 var(--sans); color: var(--ink);
+  background: transparent;
+  border: 0; border-bottom: 1px solid var(--ink); border-radius: 0;
+  padding: 10px 2px; min-height: 46px;
+  -webkit-appearance: none; appearance: none;
+  transition: background-color .15s, box-shadow .15s;
+}
+input::placeholder, textarea::placeholder { color: var(--ink-3); }
+input:focus, select:focus, textarea:focus { outline: none; background: var(--wash); box-shadow: inset 0 -1px 0 var(--ink); }
+input[type="date"] { font-variant-numeric: tabular-nums; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+input[type="number"] { -moz-appearance: textfield; font-variant-numeric: tabular-nums; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+select {
+  padding-right: 28px; cursor: pointer;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%231E1D1B' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 6px center;
+}
+textarea { min-height: 92px; resize: vertical; border: 1px solid var(--ink); padding: 12px 14px; line-height: 1.6; }
+textarea:focus { box-shadow: inset 0 0 0 1px var(--ink); }
+
+/* 단위(원, %, 일, 회)를 입력칸 오른쪽에 붙임 */
+.affix { position: relative; }
+.affix input { padding-right: 34px; }
+.affix .unit { position: absolute; right: 4px; bottom: 12px; font: 500 15px/1 var(--sans); color: var(--ink-2); pointer-events: none; }
+
+/* 금액 칸은 문서와 같은 명조로 크게 */
+#amount { font: 700 30px/1.2 var(--serif); min-height: 60px; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.field-amount .unit { font-size: 18px; bottom: 16px; }
+.amount-ko { font: 700 16px/1.5 var(--serif); color: var(--ink); margin-top: 8px; min-height: 24px; letter-spacing: .04em; }
+.amount-ko.is-empty { font: 400 14px/1.5 var(--sans); color: var(--ink-3); letter-spacing: 0; }
+
+/* 필수 누락 · 오류 */
+.field.is-missing input, .field.is-missing select { border-bottom-color: var(--vermilion); box-shadow: inset 0 -1px 0 var(--vermilion); }
+.msg { display: flex; align-items: center; gap: 6px; margin-top: 4px; font: 500 13px/1.4 var(--sans); color: var(--vermilion); }
+.msg svg { flex: none; }
+
+.note { font: 400 14px/1.6 var(--sans); color: var(--ink-2); margin: -4px 0 18px; }
+.note.warn { display: flex; gap: 8px; color: var(--ink); }
+.note.warn svg { flex: none; margin-top: 3px; }
+.period { font: 500 14px/1.5 var(--sans); color: var(--ink-2); margin-top: -6px; font-variant-numeric: tabular-nums; }
+
+/* 선택 버튼 묶음 (라디오) */
+.seg { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--ink); margin-bottom: 22px; max-width: 100%; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; min-height: 0; cursor: pointer; }
+.seg span { display: block; min-width: 112px; padding: 8px 18px; text-align: center; font: 500 15px/1.4 var(--sans); transition: background-color .15s, color .15s; }
+.seg label:hover input:not(:checked) + span { background: var(--wash); }
+.seg input:checked + span { background: var(--ink); color: #fff; }
+.seg input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* 체크 항목 */
+.check {
+  display: grid; grid-template-columns: 20px 1fr; gap: 12px; align-items: start;
+  padding: 14px 0; border-bottom: 1px solid var(--rule-soft);
+  font: 400 15px/1.55 var(--sans); cursor: pointer;
+}
+.check input { width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; padding: 0; border: 0; -webkit-appearance: auto; appearance: auto; accent-color: var(--ink); cursor: pointer; }
+.check b { font-weight: 700; margin-right: 8px; }
+.check span span { color: var(--ink-2); }
+.sub { margin-top: 26px; }
+.sub .row { margin-top: 14px; }
+
+/* 서명 패드 */
+.pads { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 22px 0 8px; }
+.pad { position: relative; border: 1px solid var(--ink); background: var(--paper); }
+.pad-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--rule); font: 500 13px/1.4 var(--sans); color: var(--ink-2); }
+.pad-head b { color: var(--ink); margin-left: 6px; }
+.pad canvas { display: block; width: 100%; height: 136px; touch-action: none; cursor: crosshair; }
+.pad::after { /* 서명 기준선 */
+  content: ""; position: absolute; left: 18px; right: 18px; bottom: 30px;
+  border-bottom: 1px dashed var(--rule); pointer-events: none;
+}
+.pad-hint { position: absolute; left: 0; right: 0; bottom: 44px; text-align: center; font: 400 15px/1 var(--serif); color: var(--ink-3); pointer-events: none; }
+.pad.signed .pad-hint { display: none; }
+.link {
+  border: 0; background: none; cursor: pointer;
+  padding: 6px 8px; min-height: 32px;
+  font: 500 13px/1 var(--sans); color: var(--ink);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.link:disabled { color: var(--ink-3); text-decoration: none; cursor: default; }
+.fine { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule); font: 400 13px/1.7 var(--sans); color: var(--ink-2); }
+
+/* ===== 미리보기 ===== */
+.preview {
+  position: sticky; top: calc(var(--bar-h) + 28px); align-self: start;
+  margin-top: 28px;
+  max-height: calc(100vh - var(--bar-h) - 56px); overflow: auto;
+  scrollbar-width: thin; scrollbar-gutter: stable;
+}
+/* 아래에 더 읽을 내용이 있으면 칸 아래쪽을 흐리게 해 스크롤할 수 있음을 알린다 */
+.preview.more {
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 72px), transparent);
+          mask-image: linear-gradient(#000 calc(100% - 72px), transparent);
+}
+.preview-tools { display: none; }
+.sheet-fit { position: relative; margin: 0 auto; overflow: hidden; }
+.preview-cap { margin: 12px auto 4px; text-align: center; font: 400 12px/1.4 var(--sans); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.preview-cap.flash { font-weight: 600; font-size: 14px; color: var(--ink); }
+
+/* ===== 차용증 문서 (실제 크기로 그린 뒤 JS가 축소) ===== */
+/* 모든 조항을 켠 문서도 A4 한 장에 들어가도록 크기를 맞췄다. 서명란은 늘 A4 아래쪽에 붙는다. */
+.sheet {
+  position: absolute; top: 0; left: 0;
+  display: flex; flex-direction: column;
+  width: var(--sheet-w); min-height: var(--sheet-h);
+  padding: 48px 66px 44px;
+  transform-origin: 0 0;
+  background: #FFFFFF; color: #1E1D1B;
+  border: 1px solid #1E1D1B;
+  box-shadow: 0 28px 56px -28px rgba(30, 29, 27, .32), 0 2px 8px -2px rgba(30, 29, 27, .10);
+  font-family: var(--serif);
+}
+.sheet-no { text-align: right; font: 400 11px/1 var(--serif); color: #5C5953; letter-spacing: .04em; }
+.sheet-title { text-align: center; font: 800 42px/1 var(--serif); letter-spacing: .6em; padding-left: .6em; margin: 10px 0 22px; }
+.sheet-amount { text-align: center; padding: 13px 0 11px; margin-bottom: 15px; border-top: 2px solid #1E1D1B; border-bottom: 1px solid #1E1D1B; }
+.sheet-amount .ko { font: 800 26px/1.3 var(--serif); letter-spacing: .06em; }
+.sheet-amount .num { margin-top: 3px; font: 400 13px/1.4 var(--serif); color: #5C5953; letter-spacing: .02em; }
+.sheet-lead { font: 400 13.5px/1.75 var(--serif); margin-bottom: 15px; }
+.ptable { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 16px; font: 400 13px/1.5 var(--serif); border-top: 1px solid #1E1D1B; border-bottom: 1px solid #1E1D1B; }
+.ptable th, .ptable td { padding: 5px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid #D9D6D0; word-break: keep-all; overflow-wrap: anywhere; }
+.ptable tr:last-child th, .ptable tr:last-child td { border-bottom: 0; }
+.ptable thead th { font-weight: 700; font-size: 13.5px; border-bottom: 1px solid #1E1D1B; }
+.ptable .k { width: 72px; font-weight: 400; color: #5C5953; }
+.clauses { list-style: none; font: 400 13px/1.7 var(--serif); }
+.clauses li { margin-bottom: 5px; word-break: keep-all; overflow-wrap: anywhere; }
+.clauses b { font-weight: 700; margin-right: 7px; }
+.clauses .free { white-space: pre-wrap; }
+.sheet-foot { margin-top: auto; padding-top: 16px; }
+.sheet-close { text-align: center; margin-bottom: 4px; font: 400 13.5px/1.7 var(--serif); }
+.sheet-date { text-align: center; margin-bottom: 14px; font: 700 15px/1.4 var(--serif); letter-spacing: .12em; }
+.signs { border-top: 1px solid #1E1D1B; }
+.sign-row { display: grid; grid-template-columns: 84px 120px minmax(0, 1fr) 64px; align-items: center; gap: 12px; min-height: 58px; border-bottom: 1px solid #D9D6D0; }
+.sign-role { font: 400 13px/1 var(--serif); color: #5C5953; }
+.sign-name { font: 700 16px/1.3 var(--serif); letter-spacing: .12em; word-break: keep-all; }
+.sign-mark { height: 50px; display: flex; align-items: center; }
+.sign-mark img { max-height: 50px; max-width: 100%; }
+/* 도장 자리: 미리보기에서는 점선 원 + '인', PNG에서 도장이 없으면 '(인)' */
+.seal-slot { position: relative; width: 64px; height: 64px; display: grid; place-items: center; margin: -3px 0; }
+.seal-slot::before { content: ""; position: absolute; inset: 3px; border: 1px dashed #A9A59E; border-radius: 50%; }
+.seal-slot .in-wait { font: 400 15px/1 var(--serif); color: #77736C; }
+.seal-slot .in-print { display: none; font: 400 13px/1 var(--serif); color: #77736C; }
+.seal-slot.stamped::before, .seal-slot.stamped span { visibility: hidden; }
+.seal-img { position: absolute; inset: 0; width: 64px; height: 64px; transform: rotate(var(--r, 0deg)); }
+/* 날인: 도장이 위에서 눌려 내려앉는 한 번의 동작 */
+.seal-img.pressing { animation: press 320ms var(--ease-out) both; }
+@keyframes press {
+  0%   { opacity: 0; transform: rotate(var(--r, 0deg)) scale(1.35); }
+  60%  { opacity: 1; transform: rotate(var(--r, 0deg)) scale(.97); }
+  100% { opacity: 1; transform: rotate(var(--r, 0deg)) scale(1); }
+}
+
+/* PNG 전용 복제본을 올려두는 자리: 화면에는 보이지 않고, 축소·스크롤과 무관하게 실제 크기로 놓인다 */
+#exportStage { position: fixed; left: 0; top: 0; width: var(--sheet-w); opacity: 0; pointer-events: none; z-index: -1; }
+#exportStage .sheet { position: relative; transform: none; box-shadow: none; }
+#exportStage .seal-slot::before, #exportStage .seal-slot .in-wait { display: none; }
+#exportStage .seal-slot .in-print { display: inline; }
+
+/* ===== 알림 토스트 ===== */
+.toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 30;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px;
+  background: var(--ink); color: #fff;
+  font: 500 14px/1.4 var(--sans);
+  box-shadow: 0 10px 24px -10px rgba(30, 29, 27, .5);
+  opacity: 0; transform: translate(-50%, 8px);
+  transition: opacity .2s var(--ease-out), transform .2s var(--ease-out);
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* 데스크톱에서는 알림을 문서 아래 캡션 자리에 보여주므로, 토스트는 화면 낭독기용으로만 남긴다 */
+@media (min-width: 1024px) {
+  .toast { clip-path: inset(50%); width: 1px; height: 1px; padding: 0; overflow: hidden; white-space: nowrap; }
+}
+
+/* ===== 태블릿·모바일: 한 열 + 탭 ===== */
+@media (max-width: 1023px) {
+  :root { --bar-h: 60px; }
+  .mark { font-size: 21px; }
+  .seal-btn { width: 52px; height: 52px; font-size: 12px; letter-spacing: 0; }
+  .seal-btn::after { inset: 4px; border-width: 1.5px; }
+  .status { font-size: 13px; }
+  .tabs {
+    display: flex; position: sticky; top: var(--bar-h); z-index: 15;
+    background: var(--paper); border-bottom: 1px solid var(--rule);
+    padding: 0 16px;
+  }
+  .tabs button {
+    flex: 1; min-height: 48px; border: 0; background: none; cursor: pointer;
+    font: 600 15px/1 var(--sans); color: var(--ink-2);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 16px 80px; }
+  .layout[data-view="write"] .preview { display: none; }
+  .layout[data-view="preview"] .form { display: none; }
+  .preview { position: static; max-height: none; overflow: visible; margin-top: 12px; scrollbar-gutter: auto; }
+  .preview.zoomed { overflow-x: auto; }
+  .preview-tools { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .sec { padding-top: 36px; }
+}
+@media (max-width: 640px) {
+  .docno { display: none; }
+  .status small { display: none; }
+  .parties { grid-template-columns: 1fr; }
+  .seg { display: flex; }
+  .seg label { flex: 1; }
+  .seg span { min-width: 0; padding: 10px 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; }
+  .seal-img.pressing { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <span class="mark">차용증</span>
+    <span class="docno" id="docNoTop"></span>
+  </div>
+  <div class="bar-right">
+    <p class="status" id="status" aria-live="polite"><span id="statusMain">필수 항목을 채워주세요</span><small id="statusSub"></small></p>
+    <button class="seal-btn" id="send" type="button" aria-label="Send: 도장을 찍고 PNG로 저장"><span>Send</span></button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="보기 전환">
+  <button type="button" role="tab" id="tab-write" data-view="write" aria-selected="true" aria-controls="form">작성</button>
+  <button type="button" role="tab" id="tab-preview" data-view="preview" aria-selected="false" aria-controls="previewPane">미리보기</button>
+</nav>
+
+<main class="layout" id="layout" data-view="write">
+
+  <!-- ===================== 입력 폼 ===================== -->
+  <form class="form" id="form" novalidate autocomplete="off" role="tabpanel" aria-labelledby="tab-write">
+
+    <section class="sec" aria-labelledby="h-parties">
+      <h2 id="h-parties">당사자</h2>
+      <div class="parties">
+        <fieldset class="party">
+          <legend>대여인<span>빌려주는 사람</span></legend>
+          <div class="field" data-required>
+            <label for="lenderName">성명<em>필수</em></label>
+            <input id="lenderName" name="lenderName" placeholder="이름">
+          </div>
+          <div class="field">
+            <label for="lenderBirth">생년월일</label>
+            <input id="lenderBirth" name="lenderBirth" inputmode="numeric" placeholder="1990. 01. 01.">
+          </div>
+          <div class="field">
+            <label for="lenderAddr">주소</label>
+            <input id="lenderAddr" name="lenderAddr" placeholder="도로명 주소">
+          </div>
+          <div class="field">
+            <label for="lenderTel">연락처</label>
+            <input id="lenderTel" name="lenderTel" type="tel" inputmode="tel" placeholder="010-0000-0000">
+          </div>
+        </fieldset>
+        <fieldset class="party">
+          <legend>차용인<span>빌리는 사람</span></legend>
+          <div class="field" data-required>
+            <label for="borrowerName">성명<em>필수</em></label>
+            <input id="borrowerName" name="borrowerName" placeholder="이름">
+          </div>
+          <div class="field">
+            <label for="borrowerBirth">생년월일</label>
+            <input id="borrowerBirth" name="borrowerBirth" inputmode="numeric" placeholder="1990. 01. 01.">
+          </div>
+          <div class="field">
+            <label for="borrowerAddr">주소</label>
+            <input id="borrowerAddr" name="borrowerAddr" placeholder="도로명 주소">
+          </div>
+          <div class="field">
+            <label for="borrowerTel">연락처</label>
+            <input id="borrowerTel" name="borrowerTel" type="tel" inputmode="tel" placeholder="010-0000-0000">
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-money">
+      <h2 id="h-money">금액과 기간</h2>
+      <div class="field field-amount" data-required style="margin-bottom:22px">
+        <label for="amount">빌려준 금액<em>필수</em></label>
+        <div class="affix">
+          <input id="amount" name="amount" inputmode="numeric" placeholder="0" data-money>
+          <span class="unit">원</span>
+        </div>
+        <output class="amount-ko is-empty" id="amountKo" for="amount">금액을 적으면 한글 금액으로 바꿔 드려요</output>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="loanDate">차용일</label>
+          <input id="loanDate" name="loanDate" type="date">
+        </div>
+        <div class="field" data-required>
+          <label for="dueDate">변제일<em>필수</em></label>
+          <input id="dueDate" name="dueDate" type="date">
+        </div>
+      </div>
+      <p class="period" id="period"></p>
+    </section>
+
+    <section class="sec" aria-labelledby="h-interest">
+      <h2 id="h-interest">이자</h2>
+      <div class="seg" role="radiogroup" aria-labelledby="h-interest">
+        <label><input type="radio" name="interest" value="none" checked><span>이자 없음</span></label>
+        <label><input type="radio" name="interest" value="yes"><span>이자 있음</span></label>
+      </div>
+      <div data-show="interest:yes" hidden>
+        <div class="row">
+          <div class="field" data-required>
+            <label for="rate">연 이율<em>필수</em></label>
+            <div class="affix"><input id="rate" name="rate" type="number" min="0" step="0.1" inputmode="decimal" placeholder="0"><span class="unit">%</span></div>
+          </div>
+          <div class="field">
+            <label for="interestWhen">지급 시기</label>
+            <select id="interestWhen" name="interestWhen">
+              <option value="monthly">매월</option>
+              <option value="atDue">변제일에 원금과 함께</option>
+            </select>
+          </div>
+          <div class="field" data-show="interestWhen:monthly">
+            <label for="interestDay">지급일</label>
+            <div class="affix"><input id="interestDay" name="interestDay" type="number" min="1" max="31" inputmode="numeric" placeholder="20"><span class="unit">일</span></div>
+          </div>
+        </div>
+        <p class="note warn" id="rateWarn" hidden>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="#C73A22" stroke-width="1.5"/><path d="M7 3.6v4.2" stroke="#C73A22" stroke-width="1.6" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".9" fill="#C73A22"/></svg>
+          <span>이자제한법상 최고이자율은 연 20%예요. 넘는 부분은 효력이 없어요.</span>
+        </p>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-repay">
+      <h2 id="h-repay">상환 방법</h2>
+      <div class="seg" role="radiogroup" aria-labelledby="h-repay">
+        <label><input type="radio" name="repay" value="once" checked><span>한 번에 갚기</span></label>
+        <label><input type="radio" name="repay" value="split"><span>나눠 갚기</span></label>
+      </div>
+      <div data-show="repay:split" hidden>
+        <div class="row">
+          <div class="field" data-required>
+            <label for="count">상환 횟수<em>필수</em></label>
+            <div class="affix"><input id="count" name="count" type="number" min="1" max="360" inputmode="numeric" placeholder="6"><span class="unit">회</span></div>
+          </div>
+          <div class="field">
+            <label for="payDay">매월 납입일</label>
+            <div class="affix"><input id="payDay" name="payDay" type="number" min="1" max="31" inputmode="numeric" placeholder="20"><span class="unit">일</span></div>
+          </div>
+        </div>
+        <p class="note" id="perPay"></p>
+      </div>
+      <fieldset class="sub">
+        <legend>입금 계좌<span>대여인 명의, 비워두면 문서에서 빠져요</span></legend>
+        <div class="row">
+          <div class="field">
+            <label for="bank">은행</label>
+            <input id="bank" name="bank" placeholder="은행 이름">
+          </div>
+          <div class="field">
+            <label for="acct">계좌번호</label>
+            <input id="acct" name="acct" inputmode="numeric" placeholder="000-0000-0000">
+          </div>
+          <div class="field">
+            <label for="holder">예금주</label>
+            <input id="holder" name="holder" placeholder="예금주">
+          </div>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="sec" aria-labelledby="h-guar">
+      <h2 id="h-guar">연대보증인</h2>
+      <div class="seg" role="radiogroup" aria-labelledby="h-guar">
+        <label><input type="radio" name="guarantor" value="none" checked><span>보증인 없음</span></label>
+        <label><input type="radio" name="guarantor" value="yes"><span>보증인 있음</span></label>
+      </div>
+      <div data-show="guarantor:yes" hidden>
+        <div class="row">
+          <div class="field" data-required>
+            <label for="gName">성명<em>필수</em></label>
+            <input id="gName" name="gName" placeholder="이름">
+          </div>
+          <div class="field">
+            <label for="gBirth">생년월일</label>
+            <input id="gBirth" name="gBirth" inputmode="numeric" placeholder="1990. 01. 01.">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="gAddr">주소</label>
+            <input id="gAddr" name="gAddr" placeholder="도로명 주소">
+          </div>
+          <div class="field">
+            <label for="gTel">연락처</label>
+            <input id="gTel" name="gTel" type="tel" inputmode="tel" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="gLimit">보증 한도</label>
+            <div class="affix"><input id="gLimit" name="gLimit" inputmode="numeric" placeholder="빌려준 금액과 같게" data-money><span class="unit">원</span></div>
+          </div>
+        </div>
+        <p class="note">개인 보증은 보증 한도(최고액)를 서면에 적어야 효력이 있어요. 비워두면 빌려준 금액이 한도가 돼요.</p>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-default">
+      <h2 id="h-default">갚지 않을 때</h2>
+      <div class="row">
+        <div class="field">
+          <label for="lateRate">지연손해금 연 이율</label>
+          <div class="affix"><input id="lateRate" name="lateRate" type="number" min="0" step="0.1" inputmode="decimal" placeholder="비우면 법정이율"><span class="unit">%</span></div>
+        </div>
+      </div>
+      <p class="note warn" id="lateWarn" hidden>
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="#C73A22" stroke-width="1.5"/><path d="M7 3.6v4.2" stroke="#C73A22" stroke-width="1.6" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".9" fill="#C73A22"/></svg>
+        <span>지연손해금이 지나치게 높으면 법원이 줄일 수 있어요. 보통 연 20% 이내로 정해요.</span>
+      </p>
+      <label class="check"><input type="checkbox" name="accel" checked><span><b>기한의 이익 상실</b><span>여러 번 밀리면 남은 돈을 한 번에 갚아야 해요</span></span></label>
+      <label class="check"><input type="checkbox" name="costs" checked><span><b>비용 부담</b><span>돈을 받아내는 데 드는 비용은 차용인이 내요</span></span></label>
+      <div class="field" style="margin-top:22px">
+        <label for="extra">추가 약정</label>
+        <textarea id="extra" name="extra" rows="3" placeholder="예: 변제일 전이라도 언제든 일부를 먼저 갚을 수 있다."></textarea>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-sign">
+      <h2 id="h-sign">작성일과 서명</h2>
+      <div class="row">
+        <div class="field">
+          <label for="writtenDate">작성일</label>
+          <input id="writtenDate" name="writtenDate" type="date">
+        </div>
+      </div>
+      <div class="pads">
+        <div class="pad" data-pad="lender">
+          <div class="pad-head"><span>대여인 서명<b data-echo="lenderName"></b></span><button type="button" class="link" data-clear disabled>지우기</button></div>
+          <canvas aria-label="대여인 서명 칸. 손가락이나 마우스로 서명하세요."></canvas>
+          <span class="pad-hint">여기에 서명</span>
+        </div>
+        <div class="pad" data-pad="borrower">
+          <div class="pad-head"><span>차용인 서명<b data-echo="borrowerName"></b></span><button type="button" class="link" data-clear disabled>지우기</button></div>
+          <canvas aria-label="차용인 서명 칸. 손가락이나 마우스로 서명하세요."></canvas>
+          <span class="pad-hint">여기에 서명</span>
+        </div>
+        <div class="pad" data-pad="guarantor" data-show="guarantor:yes" hidden>
+          <div class="pad-head"><span>보증인 서명<b data-echo="gName"></b></span><button type="button" class="link" data-clear disabled>지우기</button></div>
+          <canvas aria-label="연대보증인 서명 칸. 손가락이나 마우스로 서명하세요."></canvas>
+          <span class="pad-hint">여기에 서명</span>
+        </div>
+      </div>
+      <p class="note" style="margin:6px 0 4px">서명을 비워두면 출력한 뒤 직접 서명할 수 있어요.</p>
+      <label class="check"><input type="checkbox" name="seal" checked><span><b>이름 도장 찍기</b><span>Send를 누르면 각자 이름으로 만든 도장이 찍혀요. 등록된 인감은 아니에요.</span></span></label>
+    </section>
+
+    <p class="fine">입력한 내용은 이 브라우저 밖으로 전송되지 않아요. 이 양식은 법률 자문을 대신하지 않으니, 큰 금액이라면 전문가와 한 번 더 확인하세요.</p>
+  </form>
+
+  <!-- ===================== 문서 미리보기 ===================== -->
+  <section class="preview" id="previewPane" role="tabpanel" aria-labelledby="tab-preview">
+    <div class="preview-tools"><button type="button" class="link" id="zoomBtn" aria-pressed="false">원래 크기로 보기</button></div>
+    <div class="sheet-fit" id="sheetFit">
+      <article class="sheet" id="sheet" aria-label="차용증 문서">
+        <p class="sheet-no">문서번호 <span data-bind="docNo"></span></p>
+        <h1 class="sheet-title">차용증</h1>
+        <div class="sheet-amount">
+          <p class="ko" data-bind="amountKo"></p>
+          <p class="num" data-bind="amountNum"></p>
+        </div>
+        <p class="sheet-lead">차용인은 대여인으로부터 위 금액을 아래 조건으로 틀림없이 차용하였으며, 다음 각 조항을 성실히 이행할 것을 약정한다.</p>
+        <table class="ptable" id="ptable"></table>
+        <ol class="clauses" id="clauses"></ol>
+        <div class="sheet-foot">
+          <p class="sheet-close">위 약정을 증명하기 위하여 이 증서를 작성하고 각자 서명 날인한다.</p>
+          <p class="sheet-date" data-bind="writtenDate"></p>
+          <div class="signs" id="signs"></div>
+        </div>
+      </article>
+    </div>
+    <p class="preview-cap" id="previewCap"></p>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- 화면의 문서를 PNG로 바꾸는 라이브러리 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ---------- 화면 요소 ----------
+  const form = document.getElementById('form');
+  const layout = document.getElementById('layout');
+  const pane = document.getElementById('previewPane');
+  const fit = document.getElementById('sheetFit');
+  const sheet = document.getElementById('sheet');
+  const ptable = document.getElementById('ptable');
+  const clausesEl = document.getElementById('clauses');
+  const signsEl = document.getElementById('signs');
+  const sendBtn = document.getElementById('send');
+  const statusEl = document.getElementById('status');
+  const statusMain = document.getElementById('statusMain');
+  const statusSub = document.getElementById('statusSub');
+  const toastEl = document.getElementById('toast');
+  const amountKoOut = document.getElementById('amountKo');
+  const tabs = [...document.querySelectorAll('.tabs [role="tab"]')];
+
+  const narrow = matchMedia('(max-width: 1023px)');      // 한 열 + 탭 레이아웃
+  const coarse = matchMedia('(pointer: coarse)');        // 터치 기기 (공유 시트를 쓸지 판단)
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const SHEET_W = 794, SHEET_H = 1123;                   // A4 (CSS px)
+  const EXPORT_SCALE = 2;                                // PNG 해상도 배율
+
+  let busy = false;          // Send 처리 중에는 다시 누를 수 없음
+  let showProblems = false;  // Send를 한 번 누른 뒤부터 누락 표시를 계속 갱신
+
+  // ---------- 작은 도구들 ----------
+  const pad2 = n => String(n).padStart(2, '0');
+  const digitsOnly = s => String(s || '').replace(/\D/g, '');
+  const won = n => n.toLocaleString('ko-KR');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const BLANK_DATE = '　　　　년　　월　　일';
+
+  // 태그 하나를 만들어 클래스와 글자를 넣는다 (사용자 입력은 항상 textContent로만 넣어 XSS를 막는다)
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  // 'YYYY-MM-DD' → '2027년 4월 20일'
+  function fmtDate(iso) {
+    if (!iso) return BLANK_DATE;
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${y}년 ${m}월 ${d}일`;
+  }
+
+  // 숫자 → 한글 금액. 위조를 막는 관례대로 '일'을 생략하지 않는다 (1,000,000 → 일백만)
+  function toKorean(n) {
+    const num = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+    const small = ['천', '백', '십', ''];
+    const big = ['', '만', '억', '조'];
+    let out = '';
+    for (let i = 0; n > 0; i++, n = Math.floor(n / 10000)) {
+      const chunk = n % 10000;
+      if (!chunk) continue;
+      const part = String(chunk).padStart(4, '0').split('')
+        .map((d, k) => (+d ? num[+d] + small[k] : '')).join('');
+      out = part + big[i] + out;
+    }
+    return out;
+  }
+
+  // ---------- 문서번호: 날짜 + 헷갈리지 않는 글자 3개 ----------
+  const now = new Date();
+  const isoToday = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const ALPHA = 'ACDEFGHJKLMNPQRTUVWXY34679';
+  const docNo = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-` +
+    [...crypto.getRandomValues(new Uint8Array(3))].map(b => ALPHA[b % ALPHA.length]).join('');
+  document.getElementById('docNoTop').textContent = `No. ${docNo}`;
+  form.loanDate.value = isoToday;
+  form.writtenDate.value = isoToday;
+
+  // ---------- 금액 입력: 쓰는 동안 쉼표를 넣고 커서 위치는 유지 ----------
+  form.querySelectorAll('[data-money]').forEach(input => {
+    input.addEventListener('input', () => {
+      const caret = input.selectionStart ?? input.value.length;
+      const digitsBefore = digitsOnly(input.value.slice(0, caret)).length;
+      const raw = digitsOnly(input.value).replace(/^0+(?=\d)/, '').slice(0, 15);
+      const formatted = raw ? won(Number(raw)) : '';
+      input.value = formatted;
+      // 커서 앞에 있던 숫자 개수만큼 지나간 자리로 커서를 되돌린다
+      let pos = 0;
+      for (let seen = 0; pos < formatted.length && seen < digitsBefore; pos++) {
+        if (/\d/.test(formatted[pos])) seen++;
+      }
+      input.setSelectionRange(pos, pos);
+    });
+  });
+
+  // ---------- 서명 패드 ----------
+  // 획을 좌표 배열로 저장해 두고, 크기가 바뀌면 다시 그린다. 문서에는 서명 부분만 잘라낸 PNG를 넣는다.
+  function makePad(root) {
+    const canvas = root.querySelector('canvas');
+    const clearBtn = root.querySelector('[data-clear]');
+    const ctx = canvas.getContext('2d');
+    const strokes = [];
+    let current = null;
+    let image = '';
+
+    function drawStroke(c, pts) {
+      c.strokeStyle = c.fillStyle = '#1E1D1B';
+      c.lineWidth = 2.4; c.lineCap = 'round'; c.lineJoin = 'round';
+      c.beginPath();
+      if (pts.length === 1) { c.arc(pts[0].x, pts[0].y, 1.3, 0, Math.PI * 2); c.fill(); return; }
+      c.moveTo(pts[0].x, pts[0].y);
+      // 점과 점 사이를 중간점 기준 곡선으로 이어 손글씨처럼 부드럽게
+      for (let i = 1; i < pts.length - 1; i++) {
+        c.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
+      }
+      const last = pts[pts.length - 1];
+      c.lineTo(last.x, last.y);
+      c.stroke();
+    }
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      strokes.forEach(s => drawStroke(ctx, s));
+    }
+    function resize() {
+      const r = canvas.getBoundingClientRect();
+      if (!r.width) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      redraw();
+    }
+    function point(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    // 서명이 있는 영역만 3배 해상도로 잘라 이미지로 만든다
+    function capture() {
+      const pts = strokes.flat();
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+      const minX = Math.min(...xs) - 6, minY = Math.min(...ys) - 6;
+      const w = Math.max(...xs) + 6 - minX, h = Math.max(...ys) + 6 - minY;
+      const off = document.createElement('canvas');
+      off.width = Math.ceil(w * 3); off.height = Math.ceil(h * 3);
+      const c = off.getContext('2d');
+      c.scale(3, 3); c.translate(-minX, -minY);
+      strokes.forEach(s => drawStroke(c, s));
+      image = off.toDataURL('image/png');
+    }
+
+    canvas.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      current = [point(e)];
+      strokes.push(current);
+      redraw();
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!current) return;
+      const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      events.forEach(ev => current.push(point(ev)));
+      redraw();
+    });
+    const end = () => {
+      if (!current) return;
+      current = null;
+      capture();
+      root.classList.add('signed');
+      clearBtn.disabled = false;
+      render();
+    };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    clearBtn.addEventListener('click', () => {
+      strokes.length = 0; image = '';
+      redraw();
+      root.classList.remove('signed');
+      clearBtn.disabled = true;
+      render();
+    });
+    new ResizeObserver(resize).observe(canvas);
+    return { get image() { return image; } };
+  }
+  const pads = {};
+  document.querySelectorAll('[data-pad]').forEach(p => { pads[p.dataset.pad] = makePad(p); });
+
+  // ---------- 폼 값 읽기 ----------
+  function values() {
+    const v = Object.fromEntries(new FormData(form));
+    for (const k in v) if (typeof v[k] === 'string') v[k] = v[k].trim();
+    v.amountNum = Number(digitsOnly(v.amount)) || 0;
+    v.limitNum = Number(digitsOnly(v.gLimit)) || v.amountNum;
+    v.countNum = Math.max(0, Math.floor(Number(v.count) || 0));
+    return v;
+  }
+
+  // data-show="이름:값" 인 요소는 그 값이 선택됐을 때만 보인다
+  function applyShows(v) {
+    document.querySelectorAll('[data-show]').forEach(node => {
+      const [name, val] = node.dataset.show.split(':');
+      node.hidden = v[name] !== val;
+    });
+  }
+
+  // ---------- 누락·오류 찾기 ----------
+  function findProblems(v) {
+    const list = [];
+    form.querySelectorAll('.field[data-required]').forEach(field => {
+      if (field.closest('[hidden]')) return;          // 숨겨진 칸은 검사하지 않음
+      const input = field.querySelector('input, select, textarea');
+      const empty = input.name === 'amount' ? !v.amountNum
+        : input.name === 'count' ? !v.countNum
+        : !input.value.trim();
+      if (empty) list.push({ field, input, msg: '필수 항목이에요' });
+    });
+    if (v.loanDate && v.dueDate && v.dueDate < v.loanDate) {
+      const input = form.dueDate;
+      list.push({ field: input.closest('.field'), input, msg: '변제일이 차용일보다 빨라요' });
+    }
+    return list;
+  }
+
+  const MSG_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 3.6v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".9" fill="currentColor"/></svg>';
+
+  // 필드 아래 주홍 안내문을 붙이거나 뗀다
+  function markProblems(list) {
+    form.querySelectorAll('.field.is-missing').forEach(f => {
+      f.classList.remove('is-missing');
+      f.querySelector('.msg')?.remove();
+      f.querySelector('input, select, textarea')?.removeAttribute('aria-invalid');
+    });
+    list.forEach(({ field, input, msg }) => {
+      field.classList.add('is-missing');
+      input.setAttribute('aria-invalid', 'true');
+      const p = el('p', 'msg');
+      p.innerHTML = MSG_ICON;               // 고정된 아이콘만 innerHTML로
+      p.append(el('span', null, msg));      // 문구는 textContent로
+      field.append(p);
+    });
+  }
+
+  function updateStatus(problems) {
+    if (busy) return;
+    const n = problems.length;
+    statusEl.classList.toggle('is-missing', showProblems && n > 0);
+    statusMain.textContent = n ? `필수 항목 ${n}개 남음` : '작성 완료';
+    statusSub.textContent = !n ? '도장을 찍고 PNG로 저장해요'
+      : showProblems ? '주홍색으로 표시한 칸을 채워주세요'
+      : '빠진 칸은 Send를 누르면 표시돼요';
+  }
+
+  // ---------- 문서: 당사자 표 ----------
+  function renderParties(v) {
+    const cols = [
+      ['대여인', v.lenderName, v.lenderBirth, v.lenderAddr, v.lenderTel],
+      ['차용인', v.borrowerName, v.borrowerBirth, v.borrowerAddr, v.borrowerTel],
+    ];
+    if (v.guarantor === 'yes') cols.push(['연대보증인', v.gName, v.gBirth, v.gAddr, v.gTel]);
+    const thead = el('thead'), headRow = el('tr');
+    headRow.append(el('th', 'k'));
+    cols.forEach(c => headRow.append(el('th', null, c[0])));
+    thead.append(headRow);
+    const tbody = el('tbody');
+    ['성명', '생년월일', '주소', '연락처'].forEach((label, i) => {
+      const tr = el('tr');
+      tr.append(el('th', 'k', label));
+      cols.forEach(c => tr.append(el('td', null, c[i + 1] || '')));
+      tbody.append(tr);
+    });
+    ptable.replaceChildren(thead, tbody);
+  }
+
+  // ---------- 문서: 조항 ----------
+  function buildClauses(v) {
+    const list = [];
+    const due = fmtDate(v.dueDate);
+
+    list.push(['차용 및 변제기', `차용인은 ${fmtDate(v.loanDate)} 대여인으로부터 위 금액을 차용하였으며, ${due}까지 이를 변제한다.`]);
+
+    if (v.interest === 'yes') {
+      const rate = v.rate ? `연 ${v.rate}%` : '연 　　%';
+      const when = v.interestWhen === 'atDue' ? '변제일에 원금과 함께' : `매월 ${v.interestDay || '　　'}일에`;
+      list.push(['이자', `이자는 ${rate}로 하며, ${when} 지급한다.`]);
+    } else {
+      list.push(['이자', '이 차용금에는 이자를 붙이지 아니한다.']);
+    }
+
+    let repay;
+    if (v.repay === 'split') {
+      const n = v.countNum;
+      const base = n ? Math.floor(v.amountNum / n) : 0;
+      const last = v.amountNum - base * (n - 1);
+      repay = n && v.amountNum
+        ? `차용인은 원금을 ${n}회로 나누어 매월 ${v.payDay || '　　'}일에 ${won(base)}원씩 상환하되${last !== base ? ` 마지막 회차에는 ${won(last)}원을 상환하며` : ''}, 변제기까지 전액을 상환한다.`
+        : `차용인은 원금을 　　회로 나누어 매월 ${v.payDay || '　　'}일에 상환하되, 변제기까지 전액을 상환한다.`;
+    } else {
+      repay = '차용인은 변제기에 원금 전액을 한 번에 상환한다.';
+    }
+    const acct = [v.bank, v.acct].filter(Boolean).join(' ');
+    if (acct || v.holder) {
+      repay += ` 상환금은 대여인이 지정한 ${acct || '　　'} 계좌${v.holder ? `(예금주 ${v.holder})` : ''}로 입금하여 지급한다.`;
+    }
+    list.push(['상환 방법', repay]);
+
+    list.push(['지연손해금', v.lateRate
+      ? `차용인이 변제기까지 원리금을 변제하지 아니한 때에는 미변제 금액에 대하여 연 ${v.lateRate}%의 비율로 계산한 지연손해금을 가산하여 지급한다.`
+      : '차용인이 변제기까지 원리금을 변제하지 아니한 때에는 미변제 금액에 대하여 법정이율에 따른 지연손해금을 가산하여 지급한다.']);
+
+    if (v.accel) {
+      // 매달 내는 돈(이자 또는 분할금)이 있을 때만 '2회 연체' 조건을 넣는다
+      const periodic = (v.interest === 'yes' && v.interestWhen !== 'atDue') || v.repay === 'split';
+      list.push(['기한의 이익 상실', periodic
+        ? '차용인이 이자 또는 분할상환금의 지급을 2회 이상 연체하거나 파산·회생 절차 개시를 신청한 때에는, 대여인의 청구에 따라 기한의 이익을 잃고 남은 채무 전액을 즉시 변제한다.'
+        : '차용인이 파산·회생 절차 개시를 신청하는 등 신용이 현저히 악화된 때에는, 대여인의 청구에 따라 기한의 이익을 잃고 남은 채무 전액을 즉시 변제한다.']);
+    }
+    if (v.costs) {
+      list.push(['비용 부담', '이 계약에 따른 채무의 추심 및 소송에 드는 비용은 차용인이 부담한다.']);
+    }
+    if (v.guarantor === 'yes') {
+      const limit = v.limitNum ? `금 ${toKorean(v.limitNum)}원(₩${won(v.limitNum)})` : '금 　　　　원';
+      list.push(['연대보증', `연대보증인은 이 계약에 따라 차용인이 부담하는 채무에 대하여 ${limit}을 한도로 차용인과 연대하여 이행할 책임을 진다.`]);
+    }
+    if (v.extra) list.push(['특약', v.extra, true]);
+    return list;
+  }
+
+  function renderClauses(v) {
+    clausesEl.replaceChildren(...buildClauses(v).map(([title, text, free], i) => {
+      const li = el('li');
+      li.append(el('b', null, `제${i + 1}조 (${title})`), el('span', free ? 'free' : null, text));
+      return li;
+    }));
+  }
+
+  // ---------- 문서: 서명란 ----------
+  // 다시 그릴 때마다 도장은 지워진다 (내용이 바뀐 문서에 찍힌 도장은 무효이므로)
+  function renderSigns(v) {
+    const people = [['lender', '대여인', v.lenderName], ['borrower', '차용인', v.borrowerName]];
+    if (v.guarantor === 'yes') people.push(['guarantor', '연대보증인', v.gName]);
+    signsEl.replaceChildren(...people.map(([key, role, name]) => {
+      const row = el('div', 'sign-row');
+      row.dataset.name = name || '';
+      const mark = el('span', 'sign-mark');
+      if (pads[key].image) {
+        const img = new Image();
+        img.src = pads[key].image;
+        img.alt = `${role} 서명`;
+        mark.append(img);
+      }
+      const slot = el('span', 'seal-slot');
+      slot.append(el('span', 'in-wait', '인'), el('span', 'in-print', '(인)'));
+      row.append(el('span', 'sign-role', role), el('span', 'sign-name', name || ''), mark, slot);
+      return row;
+    }));
+  }
+
+  // ---------- 전체 다시 그리기 ----------
+  function render() {
+    const v = values();
+    applyShows(v);
+
+    // 금액 (폼 아래 한글 금액 + 문서)
+    const ko = v.amountNum ? `금 ${toKorean(v.amountNum)}원정` : '';
+    amountKoOut.textContent = ko || '금액을 적으면 한글 금액으로 바꿔 드려요';
+    amountKoOut.classList.toggle('is-empty', !ko);
+    setBind('amountKo', ko || '금 　　　　　　　　원정');
+    setBind('amountNum', v.amountNum ? `(₩${won(v.amountNum)})` : '(₩　　　　　　　　)');
+
+    // 빌리는 기간
+    const periodEl = document.getElementById('period');
+    if (v.loanDate && v.dueDate && v.dueDate >= v.loanDate) {
+      const days = Math.round((new Date(v.dueDate) - new Date(v.loanDate)) / 86400000);
+      periodEl.textContent = `빌리는 기간 ${days.toLocaleString('ko-KR')}일`;
+    } else {
+      periodEl.textContent = '';
+    }
+
+    // 이율 경고 (연 20% 초과)
+    document.getElementById('rateWarn').hidden = !(v.interest === 'yes' && Number(v.rate) > 20);
+    document.getElementById('lateWarn').hidden = !(Number(v.lateRate) > 20);
+
+    // 분할 상환 회당 금액 안내
+    const perPay = document.getElementById('perPay');
+    if (v.repay === 'split' && v.countNum && v.amountNum) {
+      const base = Math.floor(v.amountNum / v.countNum);
+      const last = v.amountNum - base * (v.countNum - 1);
+      perPay.textContent = `한 번에 ${won(base)}원씩 ${v.countNum}회` + (last !== base ? ` (마지막 회차 ${won(last)}원)` : '');
+    } else {
+      perPay.textContent = '';
+    }
+
+    // 서명 패드 머리에 이름 표시
+    document.querySelectorAll('[data-echo]').forEach(node => { node.textContent = v[node.dataset.echo] || ''; });
+
+    renderParties(v);
+    renderClauses(v);
+    renderSigns(v);
+    setBind('docNo', docNo);
+    setBind('writtenDate', fmtDate(v.writtenDate));
+
+    const problems = findProblems(v);
+    if (showProblems) markProblems(problems);
+    updateStatus(problems);
+    refit();
+  }
+  function setBind(name, text) {
+    document.querySelectorAll(`[data-bind="${name}"]`).forEach(node => { node.textContent = text; });
+  }
+
+  // ---------- 문서 축소 맞춤 ----------
+  // 문서는 언제나 실제 A4 크기로 그리고, 칸 폭에 맞게 transform으로만 줄인다 (PNG는 원래 크기로 뽑기 위해).
+  // 글자가 읽히는 크기를 지키려고 높이에 맞추지 않는다. 데스크톱은 칸 안에서 스크롤한다.
+  const previewCap = document.getElementById('previewCap');
+  const zoomBtn = document.getElementById('zoomBtn');
+  let zoomed = false;      // 모바일: 원래 크기(1:1)로 보며 가로로 밀어 읽기
+  let capFlash = '';       // 데스크톱: 캡션 자리에 잠시 띄우는 알림
+  function refit() {
+    if (!pane.offsetWidth) return;                 // 모바일 '작성' 탭에서는 숨겨져 있음
+    const s = narrow.matches && zoomed ? 1 : Math.min(pane.clientWidth / SHEET_W, 1);
+    sheet.style.transform = `scale(${s})`;
+    fit.style.width = `${SHEET_W * s}px`;
+    fit.style.height = `${sheet.offsetHeight * s}px`;
+    if (!capFlash) {
+      const h = sheet.offsetHeight;
+      previewCap.textContent = h <= SHEET_H + 1
+        ? `A4 한 장 · PNG ${SHEET_W * EXPORT_SCALE} × ${h * EXPORT_SCALE}px로 저장돼요`
+        : `A4보다 길어 세로로 긴 PNG(${SHEET_W * EXPORT_SCALE} × ${h * EXPORT_SCALE}px)로 저장돼요`;
+    }
+    updateMore();
+  }
+  // 미리보기 칸 아래에 가려진 내용이 있는지 표시
+  function updateMore() {
+    pane.classList.toggle('more', !narrow.matches && pane.scrollTop + pane.clientHeight < pane.scrollHeight - 4);
+  }
+  pane.addEventListener('scroll', updateMore, { passive: true });
+  zoomBtn.addEventListener('click', () => {
+    zoomed = !zoomed;
+    zoomBtn.setAttribute('aria-pressed', String(zoomed));
+    zoomBtn.textContent = zoomed ? '화면에 맞추기' : '원래 크기로 보기';
+    pane.classList.toggle('zoomed', zoomed);
+    refit();
+  });
+  const ro = new ResizeObserver(refit);
+  ro.observe(pane);
+  ro.observe(sheet);
+  window.addEventListener('resize', refit);
+  narrow.addEventListener('change', refit);
+
+  // ---------- 모바일 탭 ----------
+  function showView(view) {
+    layout.dataset.view = view;
+    tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.view === view)));
+    refit();
+  }
+  tabs.forEach(t => t.addEventListener('click', () => { showView(t.dataset.view); window.scrollTo({ top: 0 }); }));
+
+  // ---------- 이름 도장 만들기 ----------
+  // 이름을 세로쓰기로 오른쪽 열부터 배치한다. 두 글자는 '○○지인', 세 글자는 '○○○인'으로 네 칸을 채운다.
+  const sealCache = new Map();
+  async function makeSeal(name) {
+    if (sealCache.has(name)) return sealCache.get(name);
+    const chars = [...name.replace(/\s+/g, '')];
+    const cells = chars.length === 1 ? [...chars, '인']
+      : chars.length === 2 ? [...chars, '지', '인']
+      : chars.length === 3 ? [...chars, '인']
+      : chars;
+    try { await document.fonts.load('800 60px "Nanum Myeongjo"', cells.join('')); } catch (e) { /* 글꼴이 없어도 기본 명조로 그린다 */ }
+
+    const S = 240, C = S / 2;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = S;
+    const x = cv.getContext('2d');
+    x.fillStyle = '#C73A22';
+
+    // 1) 링: 바깥·안쪽 윤곽을 각각 느리게 흔들어, 손으로 판 도장처럼 두께가 조금씩 다르게
+    const wobble = amp => {
+      const p = [0, 0, 0].map(() => Math.random() * Math.PI * 2);
+      return t => amp * (Math.sin(3 * t + p[0]) * 0.55 + Math.sin(5 * t + p[1]) * 0.3 + Math.sin(13 * t + p[2]) * 0.15);
+    };
+    const R = C - 7;                    // 바깥 반지름 (번짐이 잘리지 않게 여유를 둔다)
+    const ringW = S * 0.08;             // 링 두께
+    const outer = wobble(1.6), inner = wobble(2.2);
+    x.beginPath();
+    for (let i = 0; i <= 240; i++) {
+      const t = (i / 240) * Math.PI * 2, r = R + outer(t);
+      x[i ? 'lineTo' : 'moveTo'](C + r * Math.cos(t), C + r * Math.sin(t));
+    }
+    for (let i = 240; i >= 0; i--) {    // 안쪽 윤곽은 반대 방향으로 그려 고리 모양을 만든다
+      const t = (i / 240) * Math.PI * 2, r = R - ringW + inner(t);
+      x.lineTo(C + r * Math.cos(t), C + r * Math.sin(t));
+    }
+    x.closePath();
+    x.fill('evenodd');
+
+    // 2) 글자: 링 안쪽 원에 내접하는 정사각형을 꽉 채워, 귀퉁이 획이 링에 닿되 잘리지 않게 한다
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    const box = (R - ringW) * Math.SQRT2 * 1.04;          // 글자가 들어갈 정사각형
+    const isHangul = cells.every(c => /[가-힣]/.test(c));
+    if (isHangul && cells.length <= 6) {
+      const rows = cells.length <= 2 ? cells.length : cells.length <= 4 ? 2 : 3;
+      const cols = Math.ceil(cells.length / rows);
+      const cw = box / cols, ch = box / rows;
+      x.font = `800 ${Math.min(cw, ch) * 1.02}px "Nanum Myeongjo", serif`;
+      cells.forEach((c, i) => {
+        const col = Math.floor(i / rows), row = i % rows;   // col 0 = 가장 오른쪽 열
+        x.fillText(c, C + box / 2 - (col + 0.5) * cw, C - box / 2 + (row + 0.5) * ch + ch * 0.04);
+      });
+    } else {
+      // 긴 이름이나 영문 이름은 한 줄로 줄여 넣는다
+      x.font = '800 60px "Nanum Myeongjo", serif';
+      const size = Math.min(64, 60 * (S * 0.72) / x.measureText(name).width);
+      x.font = `800 ${size}px "Nanum Myeongjo", serif`;
+      x.fillText(name, C, C);
+    }
+
+    // 3) 인주 농담: 큰 덩어리(저주파) 노이즈로 묻은 곳·덜 묻은 곳·고인 곳을 만든다
+    const field = cells => {          // cells×cells 무작위 값을 S×S로 부드럽게 늘린 노이즈
+      const small = document.createElement('canvas');
+      small.width = small.height = cells;
+      const sx = small.getContext('2d'), id = sx.createImageData(cells, cells);
+      for (let i = 0; i < id.data.length; i += 4) {
+        id.data[i] = Math.random() * 255; id.data[i + 3] = 255;
+      }
+      sx.putImageData(id, 0, 0);
+      const big = document.createElement('canvas');
+      big.width = big.height = S;
+      const bx = big.getContext('2d');
+      bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = 'high';
+      bx.drawImage(small, 0, 0, S, S);
+      return bx.getImageData(0, 0, S, S).data;
+    };
+    const n1 = field(6), n2 = field(18);
+    const img = x.getImageData(0, 0, S, S), d = img.data;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      if (!d[i + 3]) continue;
+      const n = (n1[i] / 255) * 0.62 + (n2[i] / 255) * 0.38;              // 0~1 농담
+      const edge = Math.hypot((p % S) - C, Math.floor(p / S) - C) / C;    // 0 중심 ~ 1 가장자리
+      const gap = 0.25 + edge * 0.08;                                     // 가장자리일수록 덜 묻는다
+      const hole = Math.min(1, Math.max(0, (n - gap) / 0.1));            // 결손을 부드럽게
+      let a = (0.8 + 0.2 * n) * (0.38 + 0.62 * hole);
+      if (n > 0.64) { d[i] = 178; d[i + 1] = 44; d[i + 2] = 24; a = Math.min(1, a + 0.06); }  // 고인 곳은 진하게
+      d[i + 3] = d[i + 3] * a;
+    }
+    x.putImageData(img, 0, 0);
+
+    // 4) 번짐: 같은 색의 아주 옅은 그림자로 종이에 스민 가장자리를 만든다
+    const out = document.createElement('canvas');
+    out.width = out.height = S;
+    const o = out.getContext('2d');
+    o.shadowColor = 'rgba(199, 58, 34, .35)';
+    o.shadowBlur = 2.5;
+    o.drawImage(cv, 0, 0);
+    const url = out.toDataURL('image/png');
+    sealCache.set(name, url);
+    return url;
+  }
+
+  // 서명란마다 차례로 도장을 누른다
+  async function stampSeals() {
+    const rows = [...signsEl.querySelectorAll('.sign-row')].filter(r => r.dataset.name);
+    const animate = !reduceMotion.matches;
+    for (const row of rows) {
+      const slot = row.querySelector('.seal-slot');
+      if (slot.querySelector('.seal-img')) continue;
+      const img = new Image();
+      img.className = 'seal-img';
+      img.alt = `${row.dataset.name} 도장`;
+      img.src = await makeSeal(row.dataset.name);
+      img.style.setProperty('--r', `${(Math.random() * 14 - 7).toFixed(1)}deg`);
+      try { await img.decode(); } catch (e) { /* 디코딩 실패해도 그대로 붙인다 */ }
+      if (animate) img.classList.add('pressing');
+      slot.classList.add('stamped');
+      slot.append(img);
+      if (animate) await wait(140);
+    }
+    if (animate && rows.length) await wait(360);
+  }
+
+  // ---------- 토스트 ----------
+  // 모바일은 화면 아래 토스트, 데스크톱은 문서 바로 아래 캡션 자리에 잠시 띄운다
+  let toastTimer;
+  function toast(text) {
+    toastEl.textContent = text;              // 화면 낭독기는 언제나 이 요소를 읽는다
+    clearTimeout(toastTimer);
+    if (narrow.matches) {
+      toastEl.classList.add('show');
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200);
+    } else {
+      capFlash = text;
+      previewCap.textContent = text;
+      previewCap.classList.add('flash');
+      toastTimer = setTimeout(() => { capFlash = ''; previewCap.classList.remove('flash'); refit(); }, 3600);
+    }
+  }
+
+  function download(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = el('a');
+    a.href = url; a.download = fileName;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  // ---------- Send: 검사 → 날인 → PNG → 공유 또는 다운로드 ----------
+  async function send() {
+    if (busy) return;
+    showProblems = true;
+    const v = values();
+    const problems = findProblems(v);
+    markProblems(problems);
+    updateStatus(problems);
+    if (problems.length) {
+      statusMain.textContent = `필수 항목 ${problems.length}개를 채워주세요`;
+      if (narrow.matches) showView('write');
+      problems[0].input.focus({ preventScroll: true });
+      problems[0].field.scrollIntoView({ block: 'center', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+      return;
+    }
+    if (typeof window.html2canvas !== 'function') {
+      toast('PNG 변환 도구를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
+      return;
+    }
+
+    busy = true;
+    let done = false;
+    sendBtn.setAttribute('aria-busy', 'true');
+    statusEl.classList.remove('is-missing');
+    statusMain.textContent = '도장을 찍는 중';
+    statusSub.textContent = '';
+    try {
+      // 도장이 찍히는 순간을 보여주려고 서명란이 보이게 옮긴다
+      const smooth = reduceMotion.matches ? 'auto' : 'smooth';
+      if (narrow.matches) {
+        showView('preview');
+        signsEl.scrollIntoView({ block: 'center' });
+      } else {
+        pane.scrollTo({ top: pane.scrollHeight, behavior: smooth });
+        if (smooth === 'smooth') await wait(380);
+      }
+      if (form.seal.checked) await stampSeals();
+      statusMain.textContent = 'PNG 만드는 중';
+      await document.fonts.ready;
+
+      // PNG 전용 복제본: 화면의 축소·스크롤과 상관없이 실제 크기 문서를 그린다
+      const stage = el('div');
+      stage.id = 'exportStage';
+      const copy = sheet.cloneNode(true);
+      copy.removeAttribute('id');
+      copy.style.transform = 'none';
+      copy.querySelectorAll('.pressing').forEach(n => n.classList.remove('pressing'));
+      stage.append(copy);
+      document.body.append(stage);
+      let canvas;
+      try {
+        canvas = await window.html2canvas(copy, {
+          scale: EXPORT_SCALE,
+          backgroundColor: '#FFFFFF',
+          logging: false,
+          width: copy.offsetWidth,
+          height: copy.offsetHeight,
+          // 복제 문서 안에서는 보이게 해야 그려진다
+          onclone: doc => { doc.getElementById('exportStage').style.opacity = '1'; },
+        });
+      } finally {
+        stage.remove();
+      }
+      const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png'));
+      const fileName = `차용증_${docNo}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // 터치 기기 + 파일 공유를 지원하면 공유 시트, 아니면 다운로드
+      if (coarse.matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: '차용증' });
+          toast('차용증 이미지를 공유했어요');
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            toast('공유를 취소했어요');
+          } else {
+            download(blob, fileName);
+            toast(`${fileName} 파일로 저장했어요`);
+          }
+        }
+      } else {
+        download(blob, fileName);
+        toast(`${fileName} 파일로 저장했어요`);
+      }
+      done = true;
+    } catch (err) {
+      console.error(err);
+      toast('이미지를 만들지 못했어요. 다시 한 번 눌러 주세요.');
+    } finally {
+      busy = false;
+      sendBtn.removeAttribute('aria-busy');
+      if (done) {
+        statusMain.textContent = '날인 완료';
+        statusSub.textContent = '내용을 고치면 도장이 지워져요';
+      } else {
+        updateStatus(findProblems(values()));
+      }
+    }
+  }
+  sendBtn.addEventListener('click', send);
+
+  // 폼이 바뀔 때마다 문서를 다시 그린다 (금액 쉼표 처리는 입력칸 자체 리스너가 먼저 실행됨)
+  form.addEventListener('input', render);
+  form.addEventListener('change', render);
+  form.addEventListener('submit', e => e.preventDefault());
+
+  render();
+  document.fonts.ready.then(refit);
+})();
+</script>
+</body>
+</html>
